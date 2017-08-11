@@ -3,6 +3,11 @@
 
 可以配合岛风GO或者AigisPlayer的魔改功能来进行替换
 
+特别感谢Lzlis様给予的帮助（http://millenniumwaraigis.wikia.com/wiki/User:Lzlis）
+
+Thank you very much Lzlis-sama.
+
+
 ---
 
 现在支持的文件格式：
