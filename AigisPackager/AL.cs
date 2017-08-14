@@ -684,6 +684,8 @@ namespace AigisPackager
             fs.Close();
         }
     }
+    //等垃圾.Net core更新了
+    /*
     public class ALFT:AL
     {
         public class Range
@@ -819,11 +821,10 @@ namespace AigisPackager
             //先求出字符的总数
             int count = RangeList[RangeList.Count - 1].ImageOffset + (RangeList[RangeList.Count - 1].CharCodeMax - RangeList[RangeList.Count - 1].CharCodeMin) + 1;
             //CharWidth也要重新刷一下，就用全全角好了，全部刷24
-            /*for(int i = 0; i < WidthFieldCount; i++)
-            {
-                WidthList[i] = 24;
-            }*/
-
+            //for(int i = 0; i < WidthFieldCount; i++)
+            //{
+            //    WidthList[i] = 24;
+            //}
             //一行9个，求出最终图片的宽高
             int width = 256;
             int height = count / 9;
@@ -980,4 +981,5 @@ namespace AigisPackager
             return result;
         }
     }
+*/
 }
