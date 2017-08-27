@@ -26,99 +26,111 @@ namespace AigisPackager
             return RawBuffer;
         }
     }
-    static class ALLZ
+    class ALLZ
     {
-        public static byte[] Decompress(byte[] buffer)
+        private void ensure(int count)
         {
-            buffer = buffer.Skip(4).Take(buffer.Length - 4).ToArray();
-            MemoryStream ms = new MemoryStream(buffer);
-            int vers = ms.ReadByte();
-            int minbitsLength = ms.ReadByte();
-            int minbitsOffset = ms.ReadByte();
-            int minbitsLiteral = ms.ReadByte();
-            int dstSize = ms.ReadInt32();
-            byte[] dst = new byte[dstSize];
-            MemoryStream dstMs = new MemoryStream(dst);
-
-            int bits = 0;
-            int bitsCount = 0;
-
-            void ensure(int count)
+            while (bitsCount < count)
             {
-                while (bitsCount < count)
-                {
-                    bits = bits | (ms.ReadByte() << bitsCount);
-                    bitsCount += 8;
-                }
+                bits = bits | (ms.ReadByte() << bitsCount);
+                bitsCount += 8;
             }
+        }
 
-            int readBit()
+        private int readBit()
+        {
+            ensure(1);
+            int result = bits & 1;
+            bits = bits >> 1;
+            bitsCount -= 1;
+            return result;
+        }
+
+        private int readBits(int count)
+        {
+            ensure(count);
+            int result = bits & ((1 << count) - 1);
+            bits = bits >> count;
+            bitsCount -= count;
+            return result;
+        }
+
+        private int readUnary()
+        {
+            int n = 0;
+            while (readBit() == 1) n++;
+            return n;
+        }
+
+        private int readControl(int minBits)
+        {
+            int u = readUnary();
+            int n = readBits(u + minBits);
+            if (u > 0)
             {
-                ensure(1);
-                int result = bits & 1;
-                bits = bits >> 1;
-                bitsCount -= 1;
-                return result;
+                return n + (((1 << u) - 1) << minBits);
             }
-
-            int readBits(int count)
+            else
             {
-                ensure(count);
-                int result = bits & ((1 << count) - 1);
-                bits = bits >> count;
-                bitsCount -= count;
-                return result;
-            }
-
-            int readUnary()
-            {
-                int n = 0;
-                while (readBit() == 1) n++;
                 return n;
             }
+        }
+        private int readControlLength()
+        {
+            return 3 + readControl(minbitsLength);
+        }
+        private int readControlOffset()
+        {
+            int offset = -1 - readControl(minbitsOffset);
+            return offset;
+        }
+        private int readControlLiteral()
+        {
+            return 1 + readControl(minbitsLiteral);
+        }
+        private void copyWord(int offset, int length)
+        {
+            int trueOffset = offset - 1;
+            for (int i = 0; i < length; i++)
+            {
+                if (offset < 0) trueOffset = (int)dstMs.Position + offset;
+                dstMs.WriteByte(dst[trueOffset]);
+            }
+        }
+        private void copyLiteral(int control)
+        {
+            byte[] temp = new byte[control];
+            ms.Read(temp, 0, control);
+            dstMs.Write(temp, 0, control);
+        }
 
-            int readControl(int minBits)
-            {
-                int u = readUnary();
-                int n = readBits(u + minBits);
-                if (u > 0)
-                {
-                    return n + (((1 << u) - 1) << minBits);
-                }
-                else
-                {
-                    return n;
-                }
-            }
-            int readControlLength()
-            {
-                return 3 + readControl(minbitsLength);
-            }
-            int readControlOffset()
-            {
-                int offset = -1 - readControl(minbitsOffset);
-                return offset;
-            }
-            int readControlLiteral()
-            {
-                return 1 + readControl(minbitsLiteral);
-            }
-            void copyWord(int offset, int length)
-            {
-                int trueOffset = offset - 1;
-                for (int i = 0; i < length; i++)
-                {
-                    if (offset < 0) trueOffset = (int)dstMs.Position + offset;
-                    dstMs.WriteByte(dst[trueOffset]);
-                }
-            }
-            void copyLiteral(int control)
-            {
-                byte[] temp = new byte[control];
-                ms.Read(temp, 0, control);
-                dstMs.Write(temp, 0, control);
-            }
+        private MemoryStream ms = null;
+        int vers = 0;
+        int minbitsLength = 0;
+        int minbitsOffset = 0;
+        int minbitsLiteral = 0;
+        int dstSize = 0;
+        byte[] dst = null;
+        MemoryStream dstMs = null;
 
+        int bits = 0;
+        int bitsCount = 0;
+
+        private ALLZ(byte[] buffer)
+        {
+            buffer = buffer.Skip(4).Take(buffer.Length - 4).ToArray();
+            ms = new MemoryStream(buffer);
+            vers = ms.ReadByte();
+            minbitsLength = ms.ReadByte();
+            minbitsOffset = ms.ReadByte();
+            minbitsLiteral = ms.ReadByte();
+            dstSize = ms.ReadInt32();
+            dst = new byte[dstSize];
+            dstMs = new MemoryStream(dst);
+        }
+
+        public byte[] Decompress()
+        {
             copyLiteral(readControlLiteral());
             int wordOffset = readControlOffset();
             int wordLength = readControlLength();
@@ -160,6 +172,12 @@ namespace AigisPackager
             }
 
             return dst.ToArray();
+        }
+
+        public static byte[] Decompress(byte[] buffer)
+        {
+            ALLZ obj = new ALLZ(buffer);
+            return obj.Decompress();
         }
         public static byte[] Compress(byte[] buffer)
         {
@@ -502,37 +520,6 @@ namespace AigisPackager
             TocOffsetList = new List<ushort>();
             MemoryStream ms = new MemoryStream(buffer);
             long basePosition = -4;
-            Entry parseTocEntry()
-            {
-                Entry entry = new Entry();
-                if (Vers == 2)
-                {
-                    entry.Index = ms.ReadWord();
-                    entry.Unknown1 = ms.ReadWord();
-                    entry.Address = ms.ReadInt32();
-                    entry.Size = ms.ReadInt32();
-                    entry.Unknown2 = BitConverter.GetBytes(ms.ReadInt32());
-                    long position = ms.Position;
-                    ms.Seek(basePosition + entry.Address - 0x22, SeekOrigin.Begin);
-                    entry.Name = ms.ReadString(-1);
-                    ms.Position = basePosition + entry.Address - 0x02;
-                    entry.Unknown3 = ms.ReadWord();
-                    ms.Position = position;
-                }
-                else
-                {
-                    entry.Index = ms.ReadWord();
-                    entry.Unknown1 = ms.ReadWord();
-                    entry.Address = ms.ReadInt32();
-                    entry.Size = ms.ReadInt32();
-                    byte[] unk = new byte[6];
-                    ms.Read(unk, 0, unk.Length);
-                    entry.Unknown2 = unk;
-                    entry.Name = ms.ReadString(-1);
-                    ms.Align(4);
-                }
-                return entry;
-            }
 
             //开始
             Vers = (byte)ms.ReadByte();
@@ -562,7 +549,7 @@ namespace AigisPackager
             }
             for(int i = 0; i < Count; i++)
             {
-                Entry entry = parseTocEntry();
+                Entry entry = parseTocEntry(ms, basePosition);
                 long position = ms.Position;
                 //拿东西出来
                 byte[] data = new byte[entry.Size];
@@ -575,6 +562,39 @@ namespace AigisPackager
             if (Vers == 2) DataOffsetByData = Files[0].Address - 0x22;
             if (Vers == 3) DataOffsetByData = Files[0].Address;
         }
+
+        private Entry parseTocEntry(MemoryStream ms, long basePosition)
+        {
+            Entry entry = new Entry();
+            if (Vers == 2)
+            {
+                entry.Index = ms.ReadWord();
+                entry.Unknown1 = ms.ReadWord();
+                entry.Address = ms.ReadInt32();
+                entry.Size = ms.ReadInt32();
+                entry.Unknown2 = BitConverter.GetBytes(ms.ReadInt32());
+                long position = ms.Position;
+                ms.Seek(basePosition + entry.Address - 0x22, SeekOrigin.Begin);
+                entry.Name = ms.ReadString(-1);
+                ms.Position = basePosition + entry.Address - 0x02;
+                entry.Unknown3 = ms.ReadWord();
+                ms.Position = position;
+            }
+            else
+            {
+                entry.Index = ms.ReadWord();
+                entry.Unknown1 = ms.ReadWord();
+                entry.Address = ms.ReadInt32();
+                entry.Size = ms.ReadInt32();
+                byte[] unk = new byte[6];
+                ms.Read(unk, 0, unk.Length);
+                entry.Unknown2 = unk;
+                entry.Name = ms.ReadString(-1);
+                ms.Align(4);
+            }
+            return entry;
+        }
+
         public override byte[] Package(string path)
         {
             if (!Directory.Exists(Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path)))) return RawBuffer;
@@ -915,23 +935,24 @@ namespace AigisPackager
                 Image.SetPixel((i + 1) % Width, (i + 1) / Width, colorHigh);
             }
         }
+
+        private byte getPaletteIndex(byte alpha)
+        {
+            byte r = 0x00;
+            if (alpha == 0) r = 0x00;
+            else
+            {
+                for (int i = 0; i < 15; i++)
+                {
+                    if (alpha > Palette[i][3] && alpha <= Palette[i + 1][3]) r = (byte)(i + 1);
+                }
+            }
+            return r;
+        }
+
         public void ImportImage(Bitmap bitmap)
         {
             //暂时只支持PAL4
-
-            byte getPaletteIndex(byte alpha)
-            {
-                byte r = 0x00;
-                if (alpha == 0) r = 0x00;
-                else
-                {
-                    for(int i = 0; i < 15; i++)
-                    {
-                        if (alpha > Palette[i][3] && alpha <= Palette[i + 1][3]) r = (byte)(i + 1);
-                    }
-                }
-                return r;
-            }
 
             int pxCount = bitmap.Width * bitmap.Height;
             Width = bitmap.Width;
