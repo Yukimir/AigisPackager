@@ -35,53 +35,6 @@ namespace AigisPackager
                 bits = bits | (ms.ReadByte() << bitsCount);
                 bitsCount += 8;
             }
-<<<<<<< HEAD
-            int readBit()
-            {
-                ensure(1);
-                int result = bits & 1;
-                bits = bits >> 1;
-                bitsCount -= 1;
-                return result;
-            }
-            int readBits(int count)
-            {
-                ensure(count);
-                int result = bits & ((1 << count) - 1);
-                bits = bits >> count;
-                bitsCount -= count;
-                return result;
-            }
-            int readUnary()
-            {
-                int n = 0;
-                while (readBit() == 1) n++;
-                return n;
-            }
-            int readControl(int minBits)
-            {
-                int u = readUnary();
-                int n = readBits(u + minBits);
-                if (u > 0)
-                {
-                    return n + (((1 << u) - 1) << minBits);
-                }
-                else
-                {
-                    return n;
-                }
-            }
-            int readControlLength()
-            {
-                return 3 + readControl(minbitsLength);
-            }
-            int readControlOffset()
-            {
-                int offset = -1 - readControl(minbitsOffset);
-                return offset;
-            }
-            int readControlLiteral()
-=======
         }
 
         private int readBit()
@@ -114,7 +67,6 @@ namespace AigisPackager
             int u = readUnary();
             int n = readBits(u + minBits);
             if (u > 0)
->>>>>>> f5fe24b576c945d85919723671846b9a56257590
             {
                 return n + (((1 << u) - 1) << minBits);
             }
