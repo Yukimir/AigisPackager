@@ -51,7 +51,6 @@ namespace AigisPackager
                     bitsCount += 8;
                 }
             }
-
             int readBit()
             {
                 ensure(1);
@@ -60,7 +59,6 @@ namespace AigisPackager
                 bitsCount -= 1;
                 return result;
             }
-
             int readBits(int count)
             {
                 ensure(count);
@@ -69,14 +67,12 @@ namespace AigisPackager
                 bitsCount -= count;
                 return result;
             }
-
             int readUnary()
             {
                 int n = 0;
                 while (readBit() == 1) n++;
                 return n;
             }
-
             int readControl(int minBits)
             {
                 int u = readUnary();
@@ -163,7 +159,7 @@ namespace AigisPackager
         }
         public static byte[] Compress(byte[] buffer)
         {
-
+            //不存在的
             return new byte[5];
         }
     }
@@ -396,7 +392,6 @@ namespace AigisPackager
             }
             return strings.ToArray();
         }
-
         public override byte[] Package(string path)
         {
             if (!File.Exists(Path.ChangeExtension(path, "txt")))
@@ -418,7 +413,6 @@ namespace AigisPackager
                 return newALTBBuffer;
             }
         }
-
         public override void SaveFile(string path)
         {
             byte[] newALTBBuffer = Package(path);
@@ -554,6 +548,7 @@ namespace AigisPackager
                 ms.Read(unk, 0, unk.Length);
                 UnknownBytes = unk;
                 DataOffset = ms.ReadWord();
+                Console.WriteLine(DataOffset);
                 for(int i = 0; i < Count; i++)
                 {
                     TocOffsetList.Add(ms.ReadWord());
@@ -583,7 +578,6 @@ namespace AigisPackager
             //这里换个方法吧。把源文件的所有东西都读出来，然后在不依赖源文件的基础上，写新文件出来。美滋滋不是么（直接filestream写，强无敌
 
             //处理新的入口和乱七八糟的东西
-            int nowOffset = 0;
             for (int i = 0; i < Files.Count; i++)
             {
                 Entry entry = Files[i];
@@ -595,7 +589,6 @@ namespace AigisPackager
                 byte[] newContent = entry.ParsedContent.Package(filePath);
                 entry.Content = newContent;
                 entry.Size = newContent.Length;
-                if (Vers == 3) TocOffsetList[i] = (ushort)nowOffset; nowOffset += entry.Size;
             }
 
             MemoryStream ms = new MemoryStream();
@@ -648,9 +641,9 @@ namespace AigisPackager
                     ms.Align(4);
                 }
             }
-            ms.WriteWord(0);
+            if(Vers == 2) ms.WriteWord(0);
             //接下来写内容，写内容的时候把address写到相应位置去
-            for(int i = 0; i < Count; i++)
+            for (int i = 0; i < Count; i++)
             {
                 Entry entry = Files[i];
                 if(Vers == 2)
@@ -666,7 +659,7 @@ namespace AigisPackager
                 ms.Write(entry.Content, 0, entry.Content.Length);
                 if (i == Count - 1) continue;
                 ms.Align(4);
-                ms.WriteWord(0);
+                if(Vers == 2) ms.WriteWord(0);
             }
             int length = (int)ms.Position;
             byte[] result = new byte[length];
@@ -738,7 +731,7 @@ namespace AigisPackager
 
         public override byte[] Package(string path)
         {
-            CreateFont("UniSun", @"C:\Users\Pro\Documents\AigisTools\charDecode\range.txt");
+            CreateFont("黑体", @"range.txt");
             MemoryStream ms = new MemoryStream();
             ms.Write(Encoding.ASCII.GetBytes("ALFT"), 0, 4);
             ms.WriteByte(Vers);
@@ -778,6 +771,7 @@ namespace AigisPackager
         }
         public void CreateFont(string fontName,string rangePath)
         {
+            Console.WriteLine(RangeList[RangeList.Count - 1].ImageOffset + (RangeList[RangeList.Count - 1].CharCodeMax - RangeList[RangeList.Count - 1].CharCodeMin) + 1);
             List<Range> rangeList = new List<Range>();
             StreamReader sr = new StreamReader(rangePath);
             string rangeText = sr.ReadToEnd();
@@ -808,7 +802,6 @@ namespace AigisPackager
                 rangeList.Add(range);
             }
             //创建新的范围
-
             //更新RangeList和RangeCount
             RangeList = rangeList;
             //RangeCount = (ushort)rangeList.Count;
@@ -818,6 +811,7 @@ namespace AigisPackager
 
             //先求出字符的总数
             int count = RangeList[RangeList.Count - 1].ImageOffset + (RangeList[RangeList.Count - 1].CharCodeMax - RangeList[RangeList.Count - 1].CharCodeMin) + 1;
+            Console.WriteLine(count);
             //CharWidth也要重新刷一下，就用全全角好了，全部刷24
             /*for(int i = 0; i < WidthFieldCount; i++)
             {
