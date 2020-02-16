@@ -701,7 +701,7 @@ namespace AigisPackager
             fs.Close();
         }
     }
-    public class ALFT:AL
+    public class ALFT : AL
     {
         public class Range
         {
@@ -747,8 +747,10 @@ namespace AigisPackager
             {
                 WidthList.Add((byte)ms.ReadByte());
             }
+            ms.Align(4);
             byte[] ALIGByte = new byte[ms.Length - ms.Position];
             ms.Read(ALIGByte, 0, ALIGByte.Length);
+            int CharCount = RangeList[RangeList.Count - 1].ImageOffset + (RangeList[RangeList.Count - 1].CharCodeMax - RangeList[RangeList.Count - 1].CharCodeMin) + 1;
             //处理ALIG
             FontImage = new ALIG(ALIGByte);
         }
@@ -776,6 +778,7 @@ namespace AigisPackager
             {
                 ms.WriteByte(WidthList[i]);
             }
+            ms.Align(4);
             byte[] ALIGByte = FontImage.Package(path);
             ms.Write(ALIGByte, 0, ALIGByte.Length);
             byte[] result = new byte[ms.Position];
@@ -825,22 +828,27 @@ namespace AigisPackager
                 nowOffset += max - min + 1;
                 rangeList.Add(range);
             }
+
+
+
             //创建新的范围
             //更新RangeList和RangeCount
             RangeList = rangeList;
-            //RangeCount = (ushort)rangeList.Count;
+            RangeCount = (ushort)rangeList.Count;
             //RangeList.Add(new Range() { CharCodeMin = 0xFFE6, CharCodeMax = 0xFFE6, ImageOffset = 0x0ED0 });
             //RangeCount++;
-            Font ft = new Font(fontName, 18f,FontStyle.Bold);
+            System.Windows.Forms.FontDialog fontDialog1 = new System.Windows.Forms.FontDialog();
+            fontDialog1.ShowDialog();
+            Font ft = new Font(fontDialog1.Font.FontFamily, 18f,fontDialog1.Font.Style);
 
             //先求出字符的总数
             int count = RangeList[RangeList.Count - 1].ImageOffset + (RangeList[RangeList.Count - 1].CharCodeMax - RangeList[RangeList.Count - 1].CharCodeMin) + 1;
             Console.WriteLine(count);
-            //CharWidth也要重新刷一下，就用全全角好了，全部刷24
-            /*for(int i = 0; i < WidthFieldCount; i++)
-            {
-                WidthList[i] = 24;
-            }*/
+
+
+            // CharWidth也要重新刷一下，就用全全角好了，全部刷24
+            WidthFieldCount = (ushort)count;
+            WidthList = new List<byte>();
 
             //一行9个，求出最终图片的宽高
             int width = 256;
@@ -864,7 +872,11 @@ namespace AigisPackager
                     using (Graphics g = Graphics.FromImage(bmp))
                     {
                         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
-                        g.DrawString(s, ft, Brushes.White, -4, 0);
+                        SizeF sizeF = g.MeasureString(s, ft);
+                        byte charWidth = Convert.ToByte(sizeF.Width - 8);
+                        Console.WriteLine(charWidth);
+                        WidthList.Add(charWidth);
+                        g.DrawString(s, ft, Brushes.White, -4, -5);
                     }
                     //然后把字模画进去
                     //先算出来画的位置
@@ -912,25 +924,33 @@ namespace AigisPackager
             Unknown5 = ms.ReadWord();
             Unknown6 = ms.ReadInt32();
             //读取Plate
-            if (Form != "PAL4") throw new Exception("暂时不支持PAL4以外的图片格式");
-            if (PaletteForm != "RGBA") throw new Exception("暂时不支持RGBA以外的颜色格式");
-            for(int i = 0; i < 16; i++)
+            switch (Form)
             {
-                byte[] RGBA = new byte[4];
-                ms.Read(RGBA, 0, 4);
-                Palette.Add(RGBA);
-                Console.WriteLine(String.Format("R:{0} G:{1} B:{2} A:{3}", RGBA[0], RGBA[1], RGBA[2], RGBA[3]));
-            }
-            Image = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            for (int i = 0; i < Width * Height; i += 2)
-            {
-                byte raw = (byte)ms.ReadByte();
-                byte[] lowRgba = Palette[raw >> 4];
-                byte[] highRgba = Palette[raw & 0xF];
-                Color colorLow = Color.FromArgb(lowRgba[3], lowRgba[0], lowRgba[1], lowRgba[2]);
-                Color colorHigh = Color.FromArgb(highRgba[3], highRgba[0], highRgba[1], highRgba[2]);
-                Image.SetPixel(i % Width, i / Width, colorLow);
-                Image.SetPixel((i + 1) % Width, (i + 1) / Width, colorHigh);
+                case "PAL4":
+                    if (PaletteForm != "RGBA") throw new Exception("暂时不支持RGBA以外的颜色格式");
+                    for (int i = 0; i < 16; i++)
+                    {
+                        byte[] RGBA = new byte[4];
+                        ms.Read(RGBA, 0, 4);
+                        Palette.Add(RGBA);
+                        Console.WriteLine(String.Format("R:{0} G:{1} B:{2} A:{3}", RGBA[0], RGBA[1], RGBA[2], RGBA[3]));
+                    }
+                    Image = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    for (int i = 0; i < Width * Height; i += 2)
+                    {
+                        byte raw = (byte)ms.ReadByte();
+                        byte[] lowRgba = Palette[raw >> 4];
+                        byte[] highRgba = Palette[raw & 0xF];
+                        Color colorLow = Color.FromArgb(lowRgba[3], lowRgba[0], lowRgba[1], lowRgba[2]);
+                        Color colorHigh = Color.FromArgb(highRgba[3], highRgba[0], highRgba[1], highRgba[2]);
+                        Image.SetPixel(i % Width, i / Width, colorLow);
+                        Image.SetPixel((i + 1) % Width, (i + 1) / Width, colorHigh);
+                    }
+                    break;
+                case "RGBA":
+                    break;
+                default:
+                    throw new Exception("不支持的图片格式");
             }
         }
 
